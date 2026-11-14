@@ -589,6 +589,48 @@
       font-size: 11px;
     }
   }
+
+  /* PWA INSTALL TOP NOTIFICATION */
+  #pwa-install-banner {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(180deg, #2b1f17 0%, #1c140f 100%);
+    border: 1.5px solid var(--brass);
+    border-radius: 12px;
+    padding: 9px 12px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.75);
+    width: min(440px, calc(100vw - 24px));
+  }
+  #pwa-install-banner .pwa-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    flex-shrink: 0;
+  }
+  #pwa-install-banner .pwa-text {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.3;
+    color: var(--cream);
+  }
+  #pwa-install-banner .pwa-text b {
+    color: var(--brass-bright);
+    display: block;
+    font-size: 12.5px;
+  }
+  #pwa-install-banner .pwa-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
 </style>
 </head>
 <body>
@@ -611,6 +653,19 @@
 
 <!-- MOBILE DRAWER BACKDROP -->
 <div id="drawer-backdrop" onclick="toggleMobileDrawer(false)"></div>
+
+<!-- PWA INSTALL TOP NOTIFICATION -->
+<div id="pwa-install-banner" class="hidden" role="region" aria-label="Install app">
+  <img class="pwa-icon" src="./icons/icon-192.png" alt="Royal Chess">
+  <div class="pwa-text" id="pwa-banner-text">
+    <b>Install Royal Chess</b>
+    Play fullscreen &amp; offline as an app.
+  </div>
+  <div class="pwa-actions">
+    <button class="btn" id="pwa-install-btn" style="padding:6px 11px; font-size:11px;" onclick="triggerPwaInstall()">Install</button>
+    <button class="btn btn-secondary" style="padding:6px 9px; font-size:11px;" aria-label="Dismiss install notification" onclick="dismissPwaBanner()">✕</button>
+  </div>
+</div>
 
 <!-- PAWN PROMOTION MODAL -->
 <div id="promo-backdrop" class="hidden" onclick="if(event.target===this) closePromotionModal()">
@@ -1649,9 +1704,64 @@ function appendChat(sender, text) {
   box.scrollTop = box.scrollHeight;
 }
 
+let deferredInstallPrompt = null;
+
+function isRunningStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function showPwaBanner(isIosHint = false) {
+  if (isRunningStandalone() || sessionStorage.getItem('pwaBannerDismissed') === '1') return;
+  const banner = document.getElementById('pwa-install-banner');
+  const textEl = document.getElementById('pwa-banner-text');
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (!banner || !textEl || !installBtn) return;
+
+  if (isIosHint) {
+    textEl.innerHTML = '<b>Install Royal Chess</b>Tap Share then "Add to Home Screen".';
+    installBtn.classList.add('hidden');
+  } else {
+    textEl.innerHTML = '<b>Install Royal Chess</b>Play fullscreen &amp; offline as an app.';
+    installBtn.classList.remove('hidden');
+  }
+  banner.classList.remove('hidden');
+}
+
+function dismissPwaBanner() {
+  sessionStorage.setItem('pwaBannerDismissed', '1');
+  const banner = document.getElementById('pwa-install-banner');
+  if (banner) banner.classList.add('hidden');
+}
+
+async function triggerPwaInstall() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  const banner = document.getElementById('pwa-install-banner');
+  if (banner) banner.classList.add('hidden');
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showPwaBanner(false);
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  const banner = document.getElementById('pwa-install-banner');
+  if (banner) banner.classList.add('hidden');
+});
+
 window.addEventListener('DOMContentLoaded', () => {
   if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  if (isIos && isSafari && !isRunningStandalone()) {
+    showPwaBanner(true);
   }
   startNewGame('w', false);
   const room = new URLSearchParams(window.location.search).get('room');
