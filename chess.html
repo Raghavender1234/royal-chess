@@ -1031,108 +1031,285 @@ const sfx = new WoodAudio();
 
 /**
  * ==========================================
- * 3. FAST MINIMAX + ALPHA-BETA CHESS ENGINE
+ * 3. ITERATIVE-DEEPENING ALPHA-BETA + QUIESCENCE ENGINE
  * ==========================================
  */
 const PIECE_VALS = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
 const PST = {
   p: [
-    [0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],
-    [5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],
-    [5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]
+    [0,0,0,0,0,0,0,0],
+    [50,50,50,50,50,50,50,50],
+    [10,10,20,30,30,20,10,10],
+    [5,5,10,27,27,10,5,5],
+    [0,0,0,22,22,0,0,0],
+    [5,-5,-10,0,0,-10,-5,5],
+    [5,10,10,-22,-22,10,10,5],
+    [0,0,0,0,0,0,0,0]
   ],
   n: [
-    [-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],
-    [-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],
-    [-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]
+    [-50,-40,-30,-30,-30,-30,-40,-50],
+    [-40,-20,0,0,0,0,-20,-40],
+    [-30,0,10,15,15,10,0,-30],
+    [-30,5,15,20,20,15,5,-30],
+    [-30,0,15,20,20,15,0,-30],
+    [-30,5,10,15,15,10,5,-30],
+    [-40,-20,0,5,5,0,-20,-40],
+    [-50,-40,-30,-30,-30,-30,-40,-50]
+  ],
+  b: [
+    [-20,-10,-10,-10,-10,-10,-10,-20],
+    [-10,0,0,0,0,0,0,-10],
+    [-10,0,5,10,10,5,0,-10],
+    [-10,5,5,10,10,5,5,-10],
+    [-10,0,10,10,10,10,0,-10],
+    [-10,10,10,10,10,10,10,-10],
+    [-10,5,0,0,0,0,5,-10],
+    [-20,-10,-10,-10,-10,-10,-10,-20]
+  ],
+  r: [
+    [0,0,0,0,0,0,0,0],
+    [5,10,10,10,10,10,10,5],
+    [-5,0,0,0,0,0,0,-5],
+    [-5,0,0,0,0,0,0,-5],
+    [-5,0,0,0,0,0,0,-5],
+    [-5,0,0,0,0,0,0,-5],
+    [-5,0,0,0,0,0,0,-5],
+    [0,0,0,5,5,0,0,0]
+  ],
+  q: [
+    [-20,-10,-10,-5,-5,-10,-10,-20],
+    [-10,0,0,0,0,0,0,-10],
+    [-10,0,5,5,5,5,0,-10],
+    [-5,0,5,5,5,5,0,-5],
+    [0,0,5,5,5,5,0,-5],
+    [-10,5,5,5,5,5,0,-10],
+    [-10,0,5,0,0,0,0,-10],
+    [-20,-10,-10,-5,-5,-10,-10,-20]
+  ],
+  k: [
+    [-30,-40,-40,-50,-50,-40,-40,-30],
+    [-30,-40,-40,-50,-50,-40,-40,-30],
+    [-30,-40,-40,-50,-50,-40,-40,-30],
+    [-30,-40,-40,-50,-50,-40,-40,-30],
+    [-20,-30,-30,-40,-40,-30,-30,-20],
+    [-10,-20,-20,-20,-20,-20,-20,-10],
+    [20,20,0,0,0,0,20,20],
+    [20,30,10,0,0,10,30,20]
+  ],
+  k_end: [
+    [-50,-40,-30,-20,-20,-30,-40,-50],
+    [-30,-20,-10,0,0,-10,-20,-30],
+    [-30,-10,20,30,30,20,-10,-30],
+    [-30,-10,30,40,40,30,-10,-30],
+    [-30,-10,30,40,40,30,-10,-30],
+    [-30,-10,20,30,30,20,-10,-30],
+    [-30,-30,0,0,0,0,-30,-30],
+    [-50,-30,-30,-30,-30,-30,-30,-50]
   ]
 };
 
 function evaluateBoard(chessInstance) {
   const b = chessInstance.board();
   let score = 0;
+  let wBishops = 0, bBishops = 0;
+  let nonKingMaterial = 0;
+  let wKingPos = null, bKingPos = null;
+
   for (let r = 0; r < 8; r++) {
     const row = b[r];
     for (let c = 0; c < 8; c++) {
       const piece = row[c];
       if (!piece) continue;
-      let val = PIECE_VALS[piece.type];
-      const table = PST[piece.type];
-      if (table) {
-        val += table[piece.color === 'w' ? r : 7 - r][c];
+      if (piece.type === 'k') {
+        if (piece.color === 'w') wKingPos = [r, c];
+        else bKingPos = [r, c];
+        score += piece.color === 'w' ? PIECE_VALS.k : -PIECE_VALS.k;
+        continue;
       }
+      if (piece.type === 'b') {
+        if (piece.color === 'w') wBishops++;
+        else bBishops++;
+      }
+      const base = PIECE_VALS[piece.type];
+      if (piece.type !== 'p') nonKingMaterial += base;
+      const table = PST[piece.type];
+      const posVal = table ? table[piece.color === 'w' ? r : 7 - r][c] : 0;
+      const val = base + posVal;
       score += piece.color === 'w' ? val : -val;
     }
   }
+
+  const kingTable = nonKingMaterial <= 2600 ? PST.k_end : PST.k;
+  if (wKingPos) score += kingTable[wKingPos[0]][wKingPos[1]];
+  if (bKingPos) score -= kingTable[7 - bKingPos[0]][bKingPos[1]];
+
+  if (wBishops >= 2) score += 30;
+  if (bBishops >= 2) score -= 30;
   return score;
 }
 
-function orderMoves(moves) {
+function moveKey(m) {
+  return m.from + m.to + (m.promotion || '');
+}
+
+function orderMoves(moves, pvKey = null, killers = null) {
   for (let i = 0; i < moves.length; i++) {
     const m = moves[i];
-    m._score = (m.captured ? 10 * PIECE_VALS[m.captured] - PIECE_VALS[m.piece] : 0) + (m.promotion ? 800 : 0);
+    const key = moveKey(m);
+    let s = 0;
+    if (pvKey && key === pvKey) {
+      s = 100000;
+    } else if (m.captured) {
+      s = 10000 + 10 * PIECE_VALS[m.captured] - PIECE_VALS[m.piece];
+    } else if (m.promotion) {
+      s = 9000 + PIECE_VALS[m.promotion];
+    } else if (killers && (killers[0] === key || killers[1] === key)) {
+      s = 5000;
+    } else {
+      if (m.san && (m.san.indexOf('+') !== -1 || m.san.indexOf('#') !== -1)) s += 80;
+      if (m.flags && (m.flags.indexOf('k') !== -1 || m.flags.indexOf('q') !== -1)) s += 60;
+    }
+    m._score = s;
   }
   return moves.sort((a, b) => b._score - a._score);
 }
 
-function minimax(game, depth, alpha, beta, isMax) {
-  if (depth === 0) return evaluateBoard(game);
-  const moves = game.moves({ verbose: true });
-  if (moves.length === 0) {
-    if (game.in_check()) return isMax ? -19000 - depth : 19000 + depth;
+function quiesce(chessInstance, alpha, beta, colorSign, qDepth, searchCtx) {
+  if ((++searchCtx.nodes & 2047) === 0 && performance.now() >= searchCtx.deadline) {
+    searchCtx.aborted = true;
     return 0;
   }
-  orderMoves(moves);
+  const standPat = colorSign * evaluateBoard(chessInstance);
+  if (standPat >= beta) return beta;
+  if (alpha < standPat) alpha = standPat;
+  if (qDepth <= 0) return alpha;
 
-  if (isMax) {
-    let maxEv = -Infinity;
-    for (let i = 0; i < moves.length; i++) {
-      game.move(moves[i]);
-      const ev = minimax(game, depth - 1, alpha, beta, false);
-      game.undo();
-      if (ev > maxEv) maxEv = ev;
-      if (ev > alpha) alpha = ev;
-      if (beta <= alpha) break;
-    }
-    return maxEv;
-  } else {
-    let minEv = Infinity;
-    for (let i = 0; i < moves.length; i++) {
-      game.move(moves[i]);
-      const ev = minimax(game, depth - 1, alpha, beta, true);
-      game.undo();
-      if (ev < minEv) minEv = ev;
-      if (ev < beta) beta = ev;
-      if (beta <= alpha) break;
-    }
-    return minEv;
+  const allMoves = chessInstance.moves({ verbose: true });
+  const captures = [];
+  for (let i = 0; i < allMoves.length; i++) {
+    const m = allMoves[i];
+    if (m.captured || m.promotion) captures.push(m);
   }
+  if (captures.length === 0) return alpha;
+  orderMoves(captures);
+
+  for (let i = 0; i < captures.length; i++) {
+    chessInstance.move(captures[i]);
+    const score = -quiesce(chessInstance, -beta, -alpha, -colorSign, qDepth - 1, searchCtx);
+    chessInstance.undo();
+    if (searchCtx.aborted) return 0;
+    if (score >= beta) return beta;
+    if (score > alpha) alpha = score;
+  }
+  return alpha;
 }
 
-function computeBestMove(game, level) {
-  const moves = orderMoves(game.moves({ verbose: true }));
-  if (!moves.length) return null;
-  if (level === 1 && Math.random() < 0.45) return moves[Math.floor(Math.random() * moves.length)];
+function negamax(chessInstance, depth, ply, alpha, beta, colorSign, useQuiesce, searchCtx) {
+  if ((++searchCtx.nodes & 2047) === 0 && performance.now() >= searchCtx.deadline) {
+    searchCtx.aborted = true;
+    return 0;
+  }
 
-  const depth = level === 1 ? 1 : level === 2 ? 2 : 3;
-  const isWhite = game.turn() === 'w';
-  let bestMove = moves[0], bestVal = isWhite ? -Infinity : Infinity;
-  let alpha = -Infinity, beta = Infinity;
+  if (ply > 0 && chessInstance.in_draw()) return 0;
 
+  if (depth <= 0) {
+    return useQuiesce
+      ? quiesce(chessInstance, alpha, beta, colorSign, 6, searchCtx)
+      : colorSign * evaluateBoard(chessInstance);
+  }
+
+  const moves = chessInstance.moves({ verbose: true });
+  if (moves.length === 0) {
+    if (chessInstance.in_check()) return -19000 + ply;
+    return 0;
+  }
+
+  const killers = searchCtx.killers[ply] || (searchCtx.killers[ply] = [null, null]);
+  orderMoves(moves, null, killers);
+
+  let best = -Infinity;
   for (let i = 0; i < moves.length; i++) {
     const m = moves[i];
-    game.move(m);
-    const val = minimax(game, depth - 1, alpha, beta, !isWhite);
-    game.undo();
-    const total = val + (level < 4 ? (Math.random() - 0.5) * 12 : 0);
-    if (isWhite) {
-      if (total > bestVal) { bestVal = total; bestMove = m; }
-      if (total > alpha) alpha = total;
-    } else {
-      if (total < bestVal) { bestVal = total; bestMove = m; }
-      if (total < beta) beta = total;
+    chessInstance.move(m);
+    const val = -negamax(chessInstance, depth - 1, ply + 1, -beta, -alpha, -colorSign, useQuiesce, searchCtx);
+    chessInstance.undo();
+    if (searchCtx.aborted) return 0;
+
+    if (val > best) best = val;
+    if (val > alpha) alpha = val;
+    if (alpha >= beta) {
+      if (!m.captured && !m.promotion) {
+        const k = moveKey(m);
+        if (killers[0] !== k) {
+          killers[1] = killers[0];
+          killers[0] = k;
+        }
+      }
+      break;
     }
   }
+  return best;
+}
+
+function computeBestMove(chessInstance, level) {
+  const rootMoves = chessInstance.moves({ verbose: true });
+  if (!rootMoves.length) return null;
+
+  const colorSign = chessInstance.turn() === 'w' ? 1 : -1;
+  const configs = {
+    1: { maxDepth: 1, timeMs: 120, useQuiesce: false, noise: 45 },
+    2: { maxDepth: 2, timeMs: 280, useQuiesce: true, noise: 18 },
+    3: { maxDepth: 4, timeMs: 650, useQuiesce: true, noise: 0 },
+    4: { maxDepth: 5, timeMs: 1350, useQuiesce: true, noise: 0 }
+  };
+  const cfg = configs[level] || configs[3];
+  const searchCtx = {
+    deadline: performance.now() + cfg.timeMs,
+    aborted: false,
+    nodes: 0,
+    killers: []
+  };
+
+  let bestMove = orderMoves(rootMoves.slice())[0];
+  let pvKey = moveKey(bestMove);
+
+  for (let depth = 1; depth <= cfg.maxDepth; depth++) {
+    const ordered = orderMoves(rootMoves.slice(), pvKey, searchCtx.killers[0]);
+    let iterBestMove = ordered[0];
+    let iterBestScore = -Infinity;
+    let alpha = -Infinity;
+    const beta = Infinity;
+    const scored = [];
+
+    for (let i = 0; i < ordered.length; i++) {
+      const m = ordered[i];
+      chessInstance.move(m);
+      const val = -negamax(chessInstance, depth - 1, 1, -beta, -alpha, -colorSign, cfg.useQuiesce, searchCtx);
+      chessInstance.undo();
+      if (searchCtx.aborted) break;
+
+      const noisyVal = cfg.noise > 0 ? val + (Math.random() - 0.5) * cfg.noise : val;
+      scored.push({ move: m, score: noisyVal });
+      if (noisyVal > iterBestScore) {
+        iterBestScore = noisyVal;
+        iterBestMove = m;
+      }
+      if (val > alpha) alpha = val;
+    }
+
+    if (searchCtx.aborted) break;
+
+    if (level === 1 && scored.length > 1 && Math.random() < 0.30) {
+      scored.sort((a, b) => b.score - a.score);
+      const pickPool = scored.slice(0, Math.min(3, scored.length));
+      bestMove = pickPool[Math.floor(Math.random() * pickPool.length)].move;
+    } else {
+      bestMove = iterBestMove;
+    }
+    pvKey = moveKey(bestMove);
+    if (iterBestScore > 18000) break; // Forced mate found
+  }
+
   return bestMove;
 }
 
@@ -1578,7 +1755,7 @@ function flipBoard() {
 
 function requestHint() {
   if (matchEndedByClock || game.game_over()) return;
-  const best = computeBestMove(game, 3);
+  const best = computeBestMove(game, 4);
   if (best) { selectedSq = best.from; legalTargets = [best]; updateSelectionHighlights(); }
 }
 
