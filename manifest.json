@@ -1,0 +1,33 @@
+{
+  "id": "./chess.html",
+  "name": "Royal Staunton Wood Chess",
+  "short_name": "Royal Chess",
+  "description": "Zero-Trace P2P & AI Chess with Tournament Clock",
+  "start_url": "./chess.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#18120e",
+  "theme_color": "#231a14",
+  "categories": ["games", "board"],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
